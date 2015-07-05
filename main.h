@@ -3,6 +3,7 @@
 
 #include <errno.h>
 #include <iostream>
+#include <functional>
 
 #include "server.h"
 

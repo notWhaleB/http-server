@@ -2,7 +2,7 @@
 
 int main(int argc, const char *argv[]) {
     HttpServer serv;
-    serv.start_echo_server(INADDR_ANY, 40000);
+    serv.start_server(INADDR_ANY, 40000, handler::echo);
 
     return 0;
 }

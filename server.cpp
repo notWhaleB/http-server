@@ -1,6 +1,18 @@
 #include "main.h"
 #include "server.h"
 
+void handler::echo(HttpServer *ptr, int clientDescriptor) {
+    char buf[BUF_SIZE];
+    ssize_t clientRepSize = read(clientDescriptor, buf, BUF_SIZE);
+
+    while (clientRepSize != 0) {
+        clientRepSize -= write(clientDescriptor, buf, clientRepSize);
+    }
+
+    ptr->_e_close(clientDescriptor);
+}
+
+
 int HttpServer::_e_socket(int domain, int type, int protocol) {
     int desc = socket(domain, type, protocol);
     if (errno != 0) {
@@ -40,36 +52,14 @@ void HttpServer::_e_close(int desc) {
     }
 }
 
-bool HttpServer::_echo_server_processor(int clientDesc) {
-    char buf[BUF_SIZE];
-    ssize_t clientReqSize = read(clientDesc, buf, BUF_SIZE);
-
-#ifndef DISABLE_KILLER_FEATURE
-    if (clientReqSize == 4 && strncmp(buf, "die", 3) == 0) {
-        write(clientDesc, "O_O\n", 4);
-        sleep(1);
-        write(clientDesc, ";_;\n", 4);
-        sleep(1);
-        write(clientDesc, "x_x\n", 4);
-        close(clientDesc);
-        return false;
-    }
-
-#endif
-
-    write(clientDesc, buf, clientReqSize);
-    close(clientDesc);
-    return true;
-}
-
-void HttpServer::_echo_server() {
+void HttpServer::_server_listener(int servDescriptor, std::function<void(HttpServer *, int)> handler) {
     while (true) {
-        int clientDescriptor = accept(_echo_serv_descriptor, nullptr, nullptr);
-        if (!_echo_server_processor(clientDescriptor)) break;
+        int clientDescriptor = _e_accept(servDescriptor, nullptr, nullptr);
+        _threadQueue.push(std::thread(handler, this, clientDescriptor));
     }
 }
 
-void HttpServer::start_echo_server(__uint32_t ip, __uint16_t port) {
+int HttpServer::start_server(uint32_t ip, uint16_t port, std::function<void(HttpServer *, int)> handler) {
     sockaddr_in addr;
     bzero(&addr, sizeof(addr));
 
@@ -77,13 +67,19 @@ void HttpServer::start_echo_server(__uint32_t ip, __uint16_t port) {
     addr.sin_addr.s_addr = htonl(ip);
     addr.sin_port = htons(port);
 
-    _echo_serv_descriptor = socket(AF_INET, SOCK_STREAM, 0);
-    bindresvport(_echo_serv_descriptor, &addr);
-    listen(_echo_serv_descriptor, SOMAXCONN);
+    int servDescriptor = _e_socket(AF_INET, SOCK_STREAM, 0);
+    _e_bind(servDescriptor, &addr);
+    _e_listen(servDescriptor, SOMAXCONN);
 
-    _echo_server();
-    close(_echo_serv_descriptor);
+    _threadQueue.push(std::thread(&HttpServer::_server_listener, this, servDescriptor, handler));
+
+    return servDescriptor;
 }
 
 HttpServer::HttpServer() {}
-HttpServer::~HttpServer() {}
+HttpServer::~HttpServer() {
+    while (_threadQueue.size() != 0) {
+        _threadQueue.front().join();
+        _threadQueue.pop();
+    }
+}
