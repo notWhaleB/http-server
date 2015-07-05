@@ -2,7 +2,8 @@
 #include "main.h"
 
 TEST(BasicTest, ServerTest) {
-    EXPECT_TRUE(socket(AF_INET, SOCK_STREAM, 0) > 0);
+    HttpServer serv;
+    EXPECT_TRUE(serv.start_server(INADDR_ANY, 40001, handler::echo) > 0);
 }
 
 int main(int argc, char **argv) {
