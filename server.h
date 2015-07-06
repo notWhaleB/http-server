@@ -9,32 +9,32 @@
 #include <string>
 #include <thread>
 #include <queue>
+#include <atomic>
+#include <poll.h>
 
 const size_t BUF_SIZE = 1024;
+const int POLL_TIMEOUT = 30;
 
 class HttpServer;
 
 namespace handler {
-    void echo(HttpServer *ptr, int clientDescriptor);
+    void echo(int clientDescriptor);
 }
 
 class HttpServer {
 private:
     std::queue<std::thread> _threadQueue; // TODO: make this on std::list and dynamically delete thread after closing in reason of lots of data collecting
-
-    /* _e_func() -- error wrapper function for func() */
-    int _e_socket(int domain, int type, int protocol);
-    void _e_bind(int, struct sockaddr_in *);
-    void _e_listen(int desc, int backlog);
-    int _e_accept(int desc, struct sockaddr *, socklen_t *);
-    void _e_close(int desc);
-    void _server_listener(int servDescriptor, std::function<void(HttpServer *, int)> handler);
+    std::atomic_bool isStop;
+    
+    void _server_listener(int servDescriptor, std::function<void(int)> handler);
 
 public:
     HttpServer();
 
-    int start_server(uint32_t ip, uint16_t port, std::function<void(HttpServer *, int)> handler);
-    friend void handler::echo(HttpServer *ptr, int clientDescriptor);
+    void start_server(uint32_t ip, uint16_t port, std::function<void(int)> handler);
+    void stop_server();
+
+    friend void handler::echo(int clientDescriptor);
 
     ~HttpServer();
 };

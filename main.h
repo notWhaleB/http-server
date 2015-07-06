@@ -6,5 +6,6 @@
 #include <functional>
 
 #include "server.h"
+#include "wrappers.h"
 
 #endif

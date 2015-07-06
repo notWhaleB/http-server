@@ -1,65 +1,37 @@
 #include "main.h"
 #include "server.h"
 
-void handler::echo(HttpServer *ptr, int clientDescriptor) {
+void handler::echo(int clientDescriptor) {
     char buf[BUF_SIZE];
+    pollfd fd[1];
+    fd[0].fd = clientDescriptor;
+    fd[0].events = POLL_IN;
+
     ssize_t clientRepSize = read(clientDescriptor, buf, BUF_SIZE);
 
     while (clientRepSize != 0) {
         clientRepSize -= write(clientDescriptor, buf, clientRepSize);
     }
 
-    ptr->_e_close(clientDescriptor);
+    _e_close(clientDescriptor);
 }
 
+void HttpServer::_server_listener(int servDescriptor, std::function<void(int)> handler) {
+    pollfd fd[1];
+    fd[0].fd = servDescriptor;
+    fd[0].events = POLL_IN;
 
-int HttpServer::_e_socket(int domain, int type, int protocol) {
-    int desc = socket(domain, type, protocol);
-    if (errno != 0) {
-        perror("Socket error: ");
+    while (!isStop) {
+        if (poll(fd, 1, POLL_TIMEOUT) == 1) {
+            int clientDescriptor = _e_accept(servDescriptor, nullptr, nullptr);
+            _threadQueue.push(std::thread(handler, clientDescriptor));
+        }
     }
 
-    return desc;
-};
-
-void HttpServer::_e_bind(int desc, struct sockaddr_in *addr) {
-    bindresvport(desc, addr);
-    if (errno != 0) {
-        perror("Bind error: ");
-    }
+    close(servDescriptor);
 }
 
-void HttpServer::_e_listen(int desc, int backlog) {
-    listen(desc, backlog);
-    if (errno != 0) {
-        perror("Listen error: ");
-    }
-}
-
-int HttpServer::_e_accept(int desc, struct sockaddr *address, socklen_t *addressLen) {
-    int clientDesc = accept(desc, address, addressLen);
-    if (errno != 0) {
-        perror("Client accept error: ");
-    }
-
-    return clientDesc;
-}
-
-void HttpServer::_e_close(int desc) {
-    close(desc);
-    if (errno != 0) {
-        perror("Socket close error: ");
-    }
-}
-
-void HttpServer::_server_listener(int servDescriptor, std::function<void(HttpServer *, int)> handler) {
-    while (true) {
-        int clientDescriptor = _e_accept(servDescriptor, nullptr, nullptr);
-        _threadQueue.push(std::thread(handler, this, clientDescriptor));
-    }
-}
-
-int HttpServer::start_server(uint32_t ip, uint16_t port, std::function<void(HttpServer *, int)> handler) {
+void HttpServer::start_server(uint32_t ip, uint16_t port, std::function<void(int)> handler) {
     sockaddr_in addr;
     bzero(&addr, sizeof(addr));
 
@@ -72,11 +44,16 @@ int HttpServer::start_server(uint32_t ip, uint16_t port, std::function<void(Http
     _e_listen(servDescriptor, SOMAXCONN);
 
     _threadQueue.push(std::thread(&HttpServer::_server_listener, this, servDescriptor, handler));
-
-    return servDescriptor;
 }
 
-HttpServer::HttpServer() {}
+void HttpServer::stop_server() {
+    isStop = true;
+}
+
+HttpServer::HttpServer() {
+    isStop = false;
+}
+
 HttpServer::~HttpServer() {
     while (_threadQueue.size() != 0) {
         _threadQueue.front().join();
