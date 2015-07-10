@@ -1,6 +1,8 @@
 #ifndef __HttpServer__server__
 #define __HttpServer__server__
 
+#include "main.h"
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -13,13 +15,7 @@
 #include <poll.h>
 
 const size_t BUF_SIZE = 1024;
-const int POLL_TIMEOUT = 30;
-
-class HttpServer;
-
-namespace handler {
-    void echo(int clientDescriptor);
-}
+const int POLL_TIMEOUT = 50;
 
 class HttpServer {
 private:
@@ -34,9 +30,11 @@ public:
     void start_server(uint32_t ip, uint16_t port, std::function<void(int)> handler);
     void stop_server();
 
-    friend void handler::echo(int clientDescriptor);
+    friend void echo_handler(int clientDescriptor);
 
     ~HttpServer();
 };
+
+void write_all(int clientDescriptor, const std::string &str);
 
 #endif
