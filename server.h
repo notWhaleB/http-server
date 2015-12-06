@@ -14,6 +14,10 @@
 #include <atomic>
 #include <poll.h>
 
+#ifdef __linux__
+    #include <asm-generic/siginfo.h>
+#endif
+
 const size_t BUF_SIZE = 1024;
 const int POLL_TIMEOUT = 50;
 
